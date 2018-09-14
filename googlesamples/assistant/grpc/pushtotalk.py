@@ -477,6 +477,7 @@ def main(api_endpoint, credentials, project_id,
             # おそらく、onceは会話が１回かどうか
             # continue_conversationはつづかどうか
             # tureなら終了
+            # ?違う？なんか呼ばれていない
             if once and (not continue_conversation):
                 break
 

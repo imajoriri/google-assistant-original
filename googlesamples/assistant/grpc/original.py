@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Sample that implements a gRPC client for the Google Assistant API."""
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 import concurrent.futures
 import json
@@ -104,6 +105,7 @@ class SampleAssistant(object):
 
     def __exit__(self, etype, e, traceback):
         if e:
+            print(e)
             return False
         self.conversation_stream.close()
 
@@ -441,45 +443,44 @@ def main(api_endpoint, credentials, project_id,
             logging.info('Device is blinking.')
             time.sleep(delay)
 
-    # 
-    with SampleAssistant(lang, device_model_id, device_id,
-                         conversation_stream, display,
-                         grpc_channel, grpc_deadline,
-                         device_handler) as assistant:
-        # If file arguments are supplied:
-        # exit after the first turn of the conversation.
-        if input_audio_file or output_audio_file:
-            assistant.assist()
-            return
 
-        # If no file arguments supplied:
-        # keep recording voice requests using the microphone
-        # and playing back assistant response using the speaker.
-        # When the once flag is set, don't wait for a trigger. Otherwise, wait.
-        # onceは最初Flaseである
-        wait_for_user_trigger = not once
-        while True:
-            if wait_for_user_trigger:
-                # pauseによって処理をここで止めて、Enterが押されるまで待つ
-                click.pause(info='Press Enter to send a new request...')
-            # 聞き取りなどを行う
-            continue_conversation = assistant.assist()
+    # httpのクラス
+    class MyHandler(SimpleHTTPRequestHandler):
 
-            # continue_conversationは、、、
-            # how are youの時、true
-            # nothingの時false
-            # つまり、会話待機の時はtrue
+        # rootにgetされた時に実行される
+        def do_GET(self):
+            with SampleAssistant(lang, device_model_id, device_id,
+                    conversation_stream, display,
+                    grpc_channel, grpc_deadline,
+                    device_handler) as assistant:
+    
+                while True:
+                    continue_conversation = assistant.assist()
+                    wait_for_user_trigger = not continue_conversation
 
-            # wait for user trigger if there is no follow-up turn in
-            # the conversation.
-            wait_for_user_trigger = not continue_conversation
+                    # 会話を終了させる
+                    if wait_for_user_trigger:
+                        self.send_response(200)
+                        self.send_header('Content-type','text/html')
+                        self.end_headers()
+                        self.wfile.write(b"<html><body><h1>hi!</h1></body></html>")
+                        #httpd.server_close()
+                        #main()
+                        break
 
-            # おそらく、onceは会話が１回かどうか
-            # continue_conversationはつづかどうか
-            # tureなら終了
-            if once and (not continue_conversation):
-                break
+                    # 会話を継続
+                    else:
+                        continue_conversation = assistant.assist()
 
+                return
+
+
+    host = 'localhost'
+    port = 8000
+    httpd = HTTPServer((host, port), MyHandler)
+    print('serving at port', port)
+    httpd.serve_forever()
+    return 
 
 if __name__ == '__main__':
     main()
